@@ -1,8 +1,14 @@
-use tch;
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use regex::Regex;
+use tch;
+
+lazy_static! {
+    static ref WHITESPACES: Regex = Regex::new(r"\s+").unwrap();
+    static ref NON_DIGIT: Regex = Regex::new(r"\s+").unwrap();
+}
 
 pub fn load_model(path: &str) -> tch::CModule {
     let model = match tch::CModule::load(path) {
@@ -12,12 +18,11 @@ pub fn load_model(path: &str) -> tch::CModule {
         }
     };
 
-    return model;
+    model
 }
 
-
 pub struct PhonemsProcessor {
-    lexicon: HashMap<String, String>
+    lexicon: HashMap<String, String>,
 }
 
 impl PhonemsProcessor {
@@ -25,29 +30,60 @@ impl PhonemsProcessor {
         let file = fs::File::open(path).unwrap();
         let reader = BufReader::new(file);
         let mut lexicon = HashMap::new();
-        let seperator = Regex::new(r"\s+").unwrap();
 
-        for (index, line) in reader.lines().enumerate() {
+        for line in reader.lines() {
             let line = line.unwrap();
             let line = line.trim();
-            let v: Vec<&str> = seperator.splitn(line, 2).collect();
-            
+            let v: Vec<&str> = WHITESPACES.splitn(line, 2).collect();
+
             let word = v[0].trim().to_lowercase().to_string();
             let phonem = v[1].trim().to_string();
 
-            if ! lexicon.contains_key(&word) {
-                lexicon.insert(word, phonem);
-            }
+            lexicon.entry(word).or_insert(phonem);
         }
 
-        return PhonemsProcessor{lexicon:lexicon};
+        PhonemsProcessor { lexicon }
     }
 
     pub fn len(&self) -> usize {
-        return self.lexicon.len();
+        self.lexicon.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lexicon.is_empty()
     }
 
     pub fn get(&self, key: &str) -> Option<&String> {
-        return self.lexicon.get(key);
+        self.lexicon.get(key)
+    }
+
+    pub fn num_to_word(&self, num: &str) -> String {
+        let rev_num = num.chars().rev().collect::<String>();
+        let sign = num.as_bytes()[0];
+
+        let sign = match sign {
+            b'+' => "plus",
+            b'-' => "minus",
+            _ => "",
+        };
+
+        let my_ord = matches!(&rev_num[0..2], "st" | "nd" | "rd" | "th");
+
+        let mut chunks: Vec<&str> = num.splitn(2, '.').collect();
+
+        let mut first = 1;
+        let mut loopstart = 0;
+        let first_element = chunks.first().unwrap();
+
+        if first_element.is_empty() {
+            first = 0;
+            if chunks.len() > 1 {
+                loopstart = 1;
+            }
+        }
+
+        for (i, chunk) in chunks.iter().enumerate() {}
+
+        return "".to_string();
     }
 }
