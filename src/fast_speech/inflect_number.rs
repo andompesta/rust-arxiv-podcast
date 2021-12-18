@@ -66,9 +66,11 @@ pub enum InflectError {
 
 pub fn normalize_number(text: &str) -> Result<String, InflectError> {
     let text = COMMA_NUMBER.replace_all(text, |caps: &Captures| caps[1].replace(",", ""));
-    
+
     // expand pounds
-    let text = POUND.replace_all(text.as_ref(), |caps: &Captures| format!("{} pounds", &caps[1]));
+    let text = POUND.replace_all(text.as_ref(), |caps: &Captures| {
+        format!("{} pounds", &caps[1])
+    });
 
     // expand dollars
     let text = DOLLAR.replace_all(text.as_ref(), |caps: &Captures| {
@@ -97,12 +99,14 @@ pub fn normalize_number(text: &str) -> Result<String, InflectError> {
         } else if dollars == 0 && cents > 0 {
             return format!("{} cents", cents);
         } else {
-            return "zero dollars".to_string();
+            "zero dollars".to_string()
         }
     });
 
     // expand decimals number
-    let text = DECIMAL_NUMBER.replace_all(text.as_ref(), |caps: &Captures| caps[1].replace(".", " point "));
+    let text = DECIMAL_NUMBER.replace_all(text.as_ref(), |caps: &Captures| {
+        caps[1].replace(".", " point ")
+    });
 
     // expand decimal number
     let text = ORDINAL_NUMBER.replace_all(text.as_ref(), |caps: &Captures| {
@@ -112,10 +116,10 @@ pub fn normalize_number(text: &str) -> Result<String, InflectError> {
             "3rd" => "theerd",
             _ => "",
         };
-        return inflect_number.to_string().clone();
+        inflect_number.to_string()
     });
 
-    let text = ORDINAL_NUMBER_2.replace_all(&text.as_ref(), |caps: &Captures| {
+    let text = ORDINAL_NUMBER_2.replace_all(text.as_ref(), |caps: &Captures| {
         let mut number = convert_number(caps[1].parse::<i64>().unwrap());
         if number == "five" {
             number = "fif".to_string();
@@ -172,7 +176,7 @@ fn convert_nn(number: u64, words: &mut Vec<String>) -> Result<(), InflectError> 
         }
     }
 
-    return Err(InflectError::ConversionError); // Should not be reached.
+    Err(InflectError::ConversionError) // Should not be reached.
 }
 
 fn convert_nnn(number: u64, words: &mut Vec<String>) -> Result<(), InflectError> {
@@ -186,7 +190,7 @@ fn convert_nnn(number: u64, words: &mut Vec<String>) -> Result<(), InflectError>
     if md > 0 {
         return convert_nn(md, words);
     }
-    return Ok(());
+    Ok(())
 }
 
 fn convert_large(number: u64, words: &mut Vec<String>) -> Result<(), InflectError> {
@@ -216,7 +220,7 @@ fn convert_large(number: u64, words: &mut Vec<String>) -> Result<(), InflectErro
         return Ok(());
     }
 
-    return Err(InflectError::ConversionError); // Should not be reached.
+    Err(InflectError::ConversionError) // Should not be reached.
 }
 
 #[cfg(test)]
@@ -249,7 +253,10 @@ mod test {
         assert_eq!("nine thousand", convert_number(9_000));
         assert_eq!("ten million", convert_number(10_000_000));
         assert_eq!("sixty billion", convert_number(60_000_000_000));
-        assert_eq!("four hundred forty four trillion", convert_number(444_000_000_000_000));
+        assert_eq!(
+            "four hundred forty four trillion",
+            convert_number(444_000_000_000_000)
+        );
     }
 
     #[test]
@@ -257,25 +264,41 @@ mod test {
         // Misc negative numbers.
         assert_eq!("minus one", convert_number(-1));
         assert_eq!("minus nine thousand one", convert_number(-9_001));
-        assert_eq!("minus four hundred forty four trillion", convert_number(-444_000_000_000_000));
+        assert_eq!(
+            "minus four hundred forty four trillion",
+            convert_number(-444_000_000_000_000)
+        );
     }
 
     #[test]
     fn normalize_number_test() {
         // dollars
         let text_with_normalized_nummber = normalize_number("I have $250 in my pocket.").unwrap();
-        assert_eq!("I have two hundred fifty dollars in my pocket.", text_with_normalized_nummber.as_str());
+        assert_eq!(
+            "I have two hundred fifty dollars in my pocket.",
+            text_with_normalized_nummber.as_str()
+        );
 
         // decimal
-        let text_with_normalized_nummber = normalize_number("I have increase my weight by 0.50 kg.").unwrap();
-        assert_eq!("I have increase my weight by zero point fifty kg.", text_with_normalized_nummber.as_str());
+        let text_with_normalized_nummber =
+            normalize_number("I have increase my weight by 0.50 kg.").unwrap();
+        assert_eq!(
+            "I have increase my weight by zero point fifty kg.",
+            text_with_normalized_nummber.as_str()
+        );
 
         // ordinal
         let text_with_normalized_nummber = normalize_number("I finished 5th overall").unwrap();
-        assert_eq!("I finished fifth overall", text_with_normalized_nummber.as_str());
+        assert_eq!(
+            "I finished fifth overall",
+            text_with_normalized_nummber.as_str()
+        );
 
         // ordinal
         let text_with_normalized_nummber = normalize_number("I finished 6th overall").unwrap();
-        assert_eq!("I finished sixth overall", text_with_normalized_nummber.as_str());
+        assert_eq!(
+            "I finished sixth overall",
+            text_with_normalized_nummber.as_str()
+        );
     }
 }
