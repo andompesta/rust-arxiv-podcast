@@ -2,10 +2,10 @@ use regex::Regex;
 use std::fmt;
 
 pub trait Tokenizer: fmt::Debug {
+    // taken from https://github.com/rth/vtext/blob/main/src/tokenize/mod.rs
     fn tokenize<'a>(&'a self, text: &'a str) -> Box<dyn Iterator<Item = &'a str> + 'a>;
 }
 
-/// Regular expression tokenizer
 #[derive(Clone, Debug)]
 pub struct RegexpTokenizer {
     pub pattern: String,

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use tch;
+use std::fmt;
 
 mod tokenizer;
 mod inflect_number;
@@ -12,9 +13,10 @@ use crate::fast_speech::tokenizer::{Tokenizer, TwitterTokenizer};
 
 
 lazy_static! {
+    static ref TAB: Regex = Regex::new(r"\t").unwrap();
     static ref WHITESPACES: Regex = Regex::new(r"\s+").unwrap();
-    static ref NON_DIGIT: Regex = Regex::new(r"\s+").unwrap();
-    static ref NON_SUPPORTED: Regex = Regex::new(r"[^ a-z'.,?!-]").unwrap();
+    static ref NOT_SUPPORTED: Regex = Regex::new(r"[^ a-z'.,?!-]").unwrap();
+    static ref NOT_PROCESS: Regex = Regex::new(r"[^a-z]").unwrap();
 }
 
 pub fn load_model(path: &str) -> tch::CModule {
@@ -33,8 +35,47 @@ pub enum PredictionError {
     ModelError
 }
 
+#[derive(Clone, PartialEq)]
+pub struct Sound {
+    phonemes: Vec<String>,
+    graphemes: Option<String>,
+}
+
+impl Sound {
+    pub fn new(phonemes: Vec<String>) -> Self {
+        Self {
+            phonemes,
+            graphemes: None
+        }
+    }
+
+    pub fn new_with_graphemes(phonemes: &str, graphemes: &str) -> Self {
+        let mut phonemes : Vec<&str> = phonemes.split(' ').collect();
+        let phonemes = phonemes.iter_mut().map( |el| {
+            el.to_string()
+        }).collect();
+
+        Self {
+            phonemes,
+            graphemes: Some(graphemes.to_string())
+        }
+    }
+}
+
+impl fmt::Display for Sound {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Use `self.number` to refer to each positional data point.
+        let graphemes =  match &self.graphemes {
+            Some(grap) => grap.as_str(),
+            None => ""
+        };
+
+        write!(f, "({}, {:?})", graphemes, self.phonemes)
+    }
+}
+
 pub struct PhonemsProcessor {
-    lexicon: HashMap<String, String>,
+    lexicon: HashMap<String, Sound>,
     tokenizer: TwitterTokenizer
 }
 
@@ -47,12 +88,19 @@ impl<'a> PhonemsProcessor {
         for line in reader.lines() {
             let line = line.unwrap();
             let line = line.trim();
-            let v: Vec<&str> = WHITESPACES.splitn(line, 2).collect();
+            let v: Vec<&str> = TAB.split(line).collect();
 
-            let word = v[0].trim().to_lowercase().to_string();
-            let phonem = v[1].trim().to_string();
+            assert_eq!(v.len(), 2);
+            
+            let graphemes = v[0].trim().to_lowercase();
+            let phonemes = v[1].trim();
+            let sound = Sound::new_with_graphemes(phonemes, &graphemes);
 
-            lexicon.entry(word).or_insert(phonem);
+            lexicon.entry(
+                graphemes
+            ).or_insert(
+                sound
+            );
         }
 
         Self { 
@@ -69,19 +117,20 @@ impl<'a> PhonemsProcessor {
         self.lexicon.is_empty()
     }
 
-    pub fn get(&self, key: &str) -> Option<&String> {
+    pub fn get(&self, key: &str) -> Option<&Sound> {
         self.lexicon.get(key)
     }
 
-    fn predict(&self, token: &str) -> Result<String, PredictionError> {
-        Ok("".to_string())
+    fn predict(&self, token: &str) -> Result<Vec<String>, PredictionError> {
+        Ok(vec!["".to_string()])
     }
 
     pub fn phonemizer(&self, text: &str) -> Vec<String> {
+        // TODO: remove double spaces
         let text = text.replace(|c: char| !c.is_ascii(), "");
         let text = inflect_number::normalize_number(&text).unwrap().to_lowercase();
 
-        let text = NON_SUPPORTED.replace_all(&text, "");
+        let text = NOT_SUPPORTED.replace_all(&text, "");
         
         let text = text.as_ref().replace("i.e.", "that is");
         let text = text.replace("e.g.", "for example");
@@ -92,13 +141,20 @@ impl<'a> PhonemsProcessor {
 
         for t in tokens {
 
-            let pron = match self.get(t) {
-                Some(phonem) => phonem.clone(),
-                None => self.predict(t).unwrap()
-            };
+            // handle symbols
+            if NOT_PROCESS.is_match(t) {
+                let pron = vec![t.to_string()];
+                prons.extend(pron);
+            }
+            // handle words
+            else {
+                let pron = match self.get(t) {
+                    Some(sound) => sound.phonemes.clone(),
+                    None => self.predict(t).unwrap()
+                };
 
-            prons.push(pron);
-            prons.push(" ".to_string());
+                prons.extend(pron);
+            }
         }
 
         prons
@@ -108,4 +164,15 @@ impl<'a> PhonemsProcessor {
 #[cfg(test)]
 mod test {
     use super::*;
+
+
+    #[test]
+    fn test_lexicon_read() {
+        let processor = PhonemsProcessor::build(
+            "./resources/lexicon.txt"
+        );
+
+        assert_eq!(processor.len(), 200020);
+    }
+
 }
